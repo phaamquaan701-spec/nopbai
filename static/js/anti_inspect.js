@@ -1,4 +1,4 @@
-﻿// Chống F12 và DevTools cơ bản trên Frontend
+// Chống F12 và DevTools cơ bản trên Frontend
 (function() {
   function showWarning() {
     const existing = document.getElementById("anti-inspect-toast");
@@ -17,8 +17,11 @@
     }, 2500);
   }
 
-  // Chặn chuột phải
+  // Chặn chuột phải (ngoại trừ trên ảnh hoặc trình xem bài làm để lưu ảnh)
   document.addEventListener("contextmenu", function(e) {
+    if (e.target && (e.target.tagName === "IMG" || e.target.closest(".viewer-modal") || e.target.closest(".preview-item") || e.target.closest(".preview-card"))) {
+      return true;
+    }
     e.preventDefault();
     showWarning();
     return false;

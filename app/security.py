@@ -1,4 +1,4 @@
-﻿import hmac
+import hmac
 import hashlib
 import json
 import base64
@@ -63,6 +63,8 @@ def get_current_user(request: Request) -> dict:
         token = auth_header[7:].strip()
     if not token:
         token = request.cookies.get("session_token")
+    if not token:
+        token = request.query_params.get("token")
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

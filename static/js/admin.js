@@ -305,6 +305,7 @@ async function loadAdminAssignments() {
     allAdminAssignments = res.assignments;
     renderAssignmentClassFilters();
     renderAdminAssignmentsList();
+    renderDashboardZipList();
   } catch (err) {
     showToast(err.message, true);
   }
@@ -343,12 +344,17 @@ function renderAdminAssignmentsList() {
         <div>📅 Hạn: ${formatDatetimeVN(a.deadline)}</div>
         <div>📊 Đã nộp: <b>${a.submitted_count} / ${a.total_students}</b> học sinh</div>
       </div>
-      <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
+      <div style="margin-top:10px;">
+        <button class="btn btn-sm" onclick="downloadAssignmentZipById(${a.id})" style="width:100%; background:#059669; color:#fff; font-weight:700; padding:8px 12px; border-radius:8px; border:none; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;" title="Xuất toàn bộ ảnh học sinh đã nộp cho bài tập này thành 1 file ZIP">
+          📦 Xuất tất cả ảnh của task này (.ZIP)
+        </button>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" onclick="goToTracking(${a.id})" style="flex:1;">
           📊 Theo dõi
         </button>
         <button class="btn btn-outline btn-sm" onclick="openDuplicateModal(${a.id})" style="flex:1; border-color:#93c5fd; color:#1d4ed8;" title="Giao bài tập này cho lớp khác">
-          📋 Giao thêm lớp
+          📋 Giao thêm
         </button>
         <button class="btn btn-outline btn-sm" onclick="toggleAssignmentStatus(${a.id})" style="width:auto;">
           ${a.status === 'open' ? '🔒 Đóng' : '🔓 Mở'}
@@ -719,7 +725,8 @@ async function viewStudentSubmission(submissionId) {
 
     const files = sub.files.map(f => ({
       id: f.id,
-      url: `/api/files/${f.id}`
+      url: `/api/files/${f.id}`,
+      filename: f.sanitized_filename || `${sub.student_name}_anh_${f.id}.jpg`
     }));
 
     window.mobileImageViewer.open({
@@ -731,4 +738,105 @@ async function viewStudentSubmission(submissionId) {
   } catch (err) {
     showToast(err.message, true);
   }
+}
+
+// 5. Tải file ZIP chứa toàn bộ ảnh bài làm của học sinh
+async function downloadAssignmentZipById(assignId) {
+  if (!assignId) return;
+  try {
+    showToast("⏳ Đang chuẩn bị và nén các file ảnh bài làm thành file ZIP...");
+    const token = localStorage.getItem("access_token");
+    const res = await fetch(`/api/admin/assignments/${assignId}/export-zip`, {
+      headers: token ? { "Authorization": `Bearer ${token}` } : {}
+    });
+
+    if (!res.ok) {
+      let msg = "Không thể tải file ZIP.";
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.detail) msg = errJson.detail;
+      } catch (e) {}
+      showToast(msg, true);
+      return;
+    }
+
+    const blob = await res.blob();
+    let filename = `BaiNop_BaiTap_${assignId}.zip`;
+    const disposition = res.headers.get("Content-Disposition");
+    if (disposition) {
+      const utf8Match = disposition.match(/filename\*=utf-8''([^;\r\n]+)/i);
+      const standardMatch = disposition.match(/filename="?([^";\r\n]+)"?/i);
+      if (utf8Match && utf8Match[1]) {
+        filename = decodeURIComponent(utf8Match[1]);
+      } else if (standardMatch && standardMatch[1]) {
+        filename = decodeURIComponent(standardMatch[1]);
+      }
+    }
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    showToast("✅ Đã tải file ZIP toàn bộ bài làm về máy thành công!");
+  } catch (err) {
+    showToast("Lỗi tải file: " + err.message, true);
+  }
+}
+
+function downloadCurrentAssignmentZip() {
+  const assignId = document.getElementById("tracking-assignment-select").value;
+  if (!assignId) {
+    showToast("Vui lòng chọn bài tập trước.", true);
+    return;
+  }
+  downloadAssignmentZipById(assignId);
+}
+
+// 6. Modal & Dashboard Danh sách Tải ZIP toàn bộ ảnh bài làm
+function openExportZipModal() {
+  renderDashboardZipList();
+  const modal = document.getElementById("export-zip-modal");
+  if (modal) modal.classList.add("show");
+}
+
+function closeExportZipModal() {
+  const modal = document.getElementById("export-zip-modal");
+  if (modal) modal.classList.remove("show");
+}
+
+function renderDashboardZipList() {
+  const dashContainer = document.getElementById("dashboard-zip-assignments-list");
+  const modalContainer = document.getElementById("export-zip-modal-list");
+
+  if (!allAdminAssignments || allAdminAssignments.length === 0) {
+    const emptyHtml = `<div style="text-align:center; padding:12px; color:var(--gray-500); font-size:0.85rem;">Chưa có bài tập nào trên hệ thống. Hãy nhấn "+ Tạo bài tập" để thêm bài mới.</div>`;
+    if (dashContainer) dashContainer.innerHTML = emptyHtml;
+    if (modalContainer) modalContainer.innerHTML = emptyHtml;
+    return;
+  }
+
+  const html = allAdminAssignments.map(a => `
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #d1fae5; border-radius:8px; padding:10px 14px; gap:10px; flex-wrap:wrap; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="flex:1; min-width:180px;">
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+          <span style="font-size:0.75rem; font-weight:800; background:#e0e7ff; color:#3730a3; padding:2px 8px; border-radius:10px;">Lớp ${a.class_name}</span>
+          <span style="font-size:0.75rem; font-weight:700; color:var(--primary); text-transform:uppercase;">${a.subject}</span>
+        </div>
+        <div style="font-weight:700; font-size:0.92rem; color:var(--gray-800);">${a.title}</div>
+        <div style="font-size:0.78rem; color:var(--gray-500); margin-top:2px;">
+          📊 Đã nộp: <b>${a.submitted_count || 0} / ${a.total_students || 0}</b> học sinh
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="downloadAssignmentZipById(${a.id})" style="background:#059669; color:#ffffff; font-weight:700; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        ⬇️ Tải file ZIP (${a.submitted_count || 0})
+      </button>
+    </div>
+  `).join("");
+
+  if (dashContainer) dashContainer.innerHTML = html;
+  if (modalContainer) modalContainer.innerHTML = html;
 }

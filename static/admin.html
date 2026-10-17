@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Quản Trị Viên – Quản Lý Nộp Bài</title>
-  <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="stylesheet" href="/static/css/viewer.css">
+  <link rel="stylesheet" href="/static/css/style.css?v=3.0">
+  <link rel="stylesheet" href="/static/css/viewer.css?v=3.0">
 </head>
 <body>
 
@@ -17,7 +17,12 @@
       </svg>
       <span>EduNopBai Admin</span>
     </div>
-    <span class="user-badge" id="admin-badge" style="background:#fef3c7; color:#b45309;">Giáo viên</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button class="btn btn-sm" onclick="openExportZipModal()" style="background: #059669; color: #ffffff; font-weight: 700; border: none; border-radius: 8px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-size: 0.82rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        📦 Xuất ZIP ảnh bài tập
+      </button>
+      <span class="user-badge" id="admin-badge" style="background:#fef3c7; color:#b45309;">Giáo viên</span>
+    </div>
   </header>
 
   <!-- Container chính -->
@@ -46,6 +51,22 @@
         <div class="stat-card">
           <span class="stat-val" id="admin-stat-submissions" style="color: var(--success);">0</span>
           <span class="stat-label">Tổng lượt nộp</span>
+        </div>
+      </div>
+
+      <!-- Khung Xuất ZIP ảnh bài tập trực tiếp trên Dashboard -->
+      <div class="card" style="margin-top: 20px; background: #f0fdf4; border: 1.5px solid #86efac; box-shadow: var(--shadow-sm);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <h3 style="font-size: 1rem; font-weight: 800; color: #166534; display: flex; align-items: center; gap: 6px;">
+            📦 Xuất toàn bộ ảnh bài làm theo Task (.ZIP)
+          </h3>
+          <span style="font-size: 0.75rem; background: #bbf7d0; color: #166534; padding: 3px 8px; border-radius: 12px; font-weight: 700;">Tải về máy</span>
+        </div>
+        <p style="font-size: 0.82rem; color: #15803d; margin-bottom: 12px;">
+          Bấm nút bên dưới để tải file ZIP chứa tất cả ảnh học sinh đã nộp về máy tính của bạn:
+        </p>
+        <div id="dashboard-zip-assignments-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="text-align: center; padding: 12px; color: #15803d; font-size: 0.85rem;">Đang tải danh sách bài tập...</div>
         </div>
       </div>
 
@@ -132,6 +153,12 @@
           <span style="color: var(--success); font-weight: 600;" id="track-ontime-tag">🟢 0 đúng hạn</span>
           <span style="color: var(--late); font-weight: 600;" id="track-late-tag">🟣 0 nộp muộn</span>
           <span style="color: var(--danger); font-weight: 600;" id="track-unsub-tag">🔴 0 chưa nộp</span>
+        </div>
+
+        <div style="margin-top: 14px; border-top: 1px solid var(--gray-200); padding-top: 14px;">
+          <button class="btn" id="btn-track-download-zip" onclick="downloadCurrentAssignmentZip()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; font-size: 0.95rem; color: #ffffff; background: #059669; border: none; padding: 12px; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(5,150,105,0.3);">
+            📦 Tải toàn bộ ảnh bài làm của task này (.ZIP)
+          </button>
         </div>
       </div>
 
@@ -319,6 +346,19 @@
         </div>
         <button type="submit" class="btn btn-primary" id="btn-confirm-duplicate">Xác nhận giao cho các lớp đã chọn</button>
       </form>
+  <!-- MODAL XUẤT ZIP TOÀN BỘ ẢNH BÀI TẬP -->
+  <div class="modal-backdrop" id="export-zip-modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: #065f46;">📦 Xuất file ZIP ảnh bài làm</h3>
+        <button class="close-btn" onclick="closeExportZipModal()">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--gray-600); margin-bottom: 14px;">
+        Chọn bài tập (task) cần xuất. Hệ thống sẽ tự động đóng gói toàn bộ ảnh bài nộp mới nhất của cả lớp vào 1 file ZIP và tải trực tiếp về máy của bạn:
+      </p>
+      <div id="export-zip-modal-list" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+        <!-- Đổ động từ JS -->
+      </div>
     </div>
   </div>
 
@@ -366,9 +406,8 @@
     </button>
   </nav>
 
-  <script src="/static/js/app.js"></script>
-  <script src="/static/js/image_viewer.js"></script>
-  <script src="/static/js/anti_inspect.js"></script>
-  <script src="/static/js/admin.js"></script>
+  <script src="/static/js/app.js?v=3.0"></script>
+  <script src="/static/js/image_viewer.js?v=3.0"></script>
+  <script src="/static/js/admin.js?v=3.0"></script>
 </body>
 </html>

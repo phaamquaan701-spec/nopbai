@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Mobile Image Viewer Component
  * Hỗ trợ cảm ứng đỉnh cao: Pinch-to-zoom, Double-tap, Pan khi zoom, Vuốt trái/phải chuyển ảnh
  */
@@ -30,7 +30,12 @@ class MobileImageViewer {
           <div class="viewer-student-name" id="viewer-student">Tên học sinh</div>
           <div class="viewer-sub-info" id="viewer-info">Thông tin bài nộp</div>
         </div>
-        <button class="viewer-close-btn" id="viewer-close" title="Đóng">&times;</button>
+        <div class="viewer-header-actions">
+          <a class="viewer-action-btn" id="viewer-download" href="#" target="_blank" download="bai_lam.jpg" title="Tải ảnh này về máy">
+            ⬇️ Tải ảnh
+          </a>
+          <button class="viewer-close-btn" id="viewer-close" title="Đóng">&times;</button>
+        </div>
       </div>
       <div class="viewer-viewport" id="viewer-viewport">
         <div class="viewer-image-container" id="viewer-container">
@@ -57,6 +62,7 @@ class MobileImageViewer {
     this.btnPrev = this.modal.querySelector("#viewer-prev");
     this.btnNext = this.modal.querySelector("#viewer-next");
     this.btnClose = this.modal.querySelector("#viewer-close");
+    this.btnDownload = this.modal.querySelector("#viewer-download");
   }
 
   open({ files, initialIndex = 0, studentName = "", assignmentTitle = "", submitTime = "" }) {
@@ -84,8 +90,19 @@ class MobileImageViewer {
     this.resetZoom();
 
     const file = this.files[this.currentIndex];
-    const fileUrl = file.url || `/api/files/${file.id}`;
+    const token = localStorage.getItem("access_token");
+    let fileUrl = file.url || `/api/files/${file.id}`;
+    if (token && !fileUrl.includes("token=")) {
+      fileUrl += (fileUrl.includes("?") ? "&" : "?") + `token=${encodeURIComponent(token)}`;
+    }
     this.img.src = fileUrl;
+
+    if (this.btnDownload) {
+      this.btnDownload.href = fileUrl;
+      const safeName = (this.studentName || "bai_lam").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, "_");
+      const downloadName = file.filename || `${safeName}_anh_${this.currentIndex + 1}.jpg`;
+      this.btnDownload.setAttribute("download", downloadName);
+    }
 
     this.counter.textContent = `Ảnh ${this.currentIndex + 1}/${this.files.length}`;
     this.btnPrev.disabled = this.currentIndex === 0;
@@ -119,6 +136,9 @@ class MobileImageViewer {
     this.btnClose.addEventListener("click", () => this.close());
     this.btnPrev.addEventListener("click", () => this.prev());
     this.btnNext.addEventListener("click", () => this.next());
+
+    // Chặn kéo ghost image mặc định của browser để lướt mượt mà và cho phép click/lưu ảnh
+    this.img.addEventListener("dragstart", (e) => e.preventDefault());
 
     // Phím bấm máy tính
     window.addEventListener("keydown", (e) => {

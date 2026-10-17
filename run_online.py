@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -20,7 +20,7 @@ def run():
 
     # 1. Khởi động Web Server (Uvicorn)
     print("[1/3] Đang khởi động Web Server nội bộ (port 8000)...")
-    server_cmd = [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"]
+    server_cmd = [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"]
     server_proc = subprocess.Popen(
         server_cmd,
         cwd=str(BASE_DIR),

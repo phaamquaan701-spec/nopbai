@@ -1,6 +1,13 @@
 from typing import List, Optional
+import os
+import re
+import tempfile
+import zipfile
+from starlette.background import BackgroundTask
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from app.config import UPLOAD_DIR
 from app.database import get_db, get_current_iso_time
 from app.security import require_admin, hash_password
 from app.deadline_engine import (
@@ -540,3 +547,122 @@ def get_submission_detail(submission_id: int, admin: dict = Depends(require_admi
 
         sub_dict["all_attempts"] = [dict(oa) for oa in other_attempts]
         return {"success": True, "submission": sub_dict}
+
+
+def sanitize_filename_str(name: str) -> str:
+    name = re.sub(r'[\\/*?:"<>|]', "", name)
+    return name.strip() or "hoc_sinh"
+
+
+# 7. Tải toàn bộ bài nộp của cả lớp về máy dưới dạng file ZIP
+@router.get("/assignments/{assignment_id}/export-zip")
+def export_assignment_submissions_zip(assignment_id: int, admin: dict = Depends(require_admin)):
+    """
+    Đóng gói toàn bộ ảnh bài làm của học sinh trong bài tập này thành 1 file ZIP duy nhất.
+    """
+    with get_db() as conn:
+        assign = conn.execute(
+            """
+            SELECT a.id, a.title, a.subject, c.name as class_name
+            FROM assignments a
+            JOIN classes c ON a.class_id = c.id
+            WHERE a.id = ?
+            """,
+            (assignment_id,)
+        ).fetchone()
+
+        if not assign:
+            raise HTTPException(status_code=404, detail="Không tìm thấy bài tập.")
+
+        # Lấy danh sách học sinh và file bài nộp mới nhất của từng học sinh
+        query = """
+        SELECT 
+            u.id as student_id, u.full_name as student_name, u.username,
+            s.id as submission_id, s.attempt_number, s.submitted_at, s.is_late, s.late_seconds,
+            sf.id as file_id, sf.storage_key, sf.sanitized_filename, sf.order_index
+        FROM users u
+        JOIN submissions s ON s.student_id = u.id AND s.assignment_id = ?
+        JOIN submission_files sf ON sf.submission_id = s.id
+        WHERE s.attempt_number = (
+            SELECT MAX(s2.attempt_number) 
+            FROM submissions s2 
+            WHERE s2.assignment_id = ? AND s2.student_id = u.id
+        )
+        ORDER BY u.full_name COLLATE NOCASE ASC, sf.order_index ASC
+        """
+        rows = conn.execute(query, (assignment_id, assignment_id)).fetchall()
+
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail="Bài tập này hiện chưa có bài nộp nào có ảnh để tải về."
+        )
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    tmp_path = tmp.name
+    tmp.close()
+
+    clean_subject = sanitize_filename_str(assign["subject"]).replace(" ", "_")
+    clean_title = sanitize_filename_str(assign["title"]).replace(" ", "_")
+    clean_class = sanitize_filename_str(assign["class_name"]).replace(" ", "_")
+    zip_display_name = f"BaiNop_{clean_subject}_{clean_class}_{clean_title}.zip"
+
+    manifest_lines = [
+        f"BÁO CÁO BÀI NỘP: {assign['title']} ({assign['subject']})",
+        f"Lớp: {assign['class_name']}",
+        f"Thời gian xuất: {get_server_now().strftime('%d/%m/%Y %H:%M:%S')}",
+        "=" * 60,
+        f"{'STT':<4} | {'Họ và tên':<24} | {'Tài khoản':<16} | {'Trạng thái':<14} | {'Số ảnh':<6}",
+        "-" * 60,
+    ]
+
+    students_data = {}
+    for r in rows:
+        st_id = r["student_id"]
+        if st_id not in students_data:
+            students_data[st_id] = {
+                "name": r["student_name"],
+                "username": r["username"],
+                "submitted_at": r["submitted_at"],
+                "is_late": r["is_late"],
+                "attempt_number": r["attempt_number"],
+                "files": []
+            }
+        students_data[st_id]["files"].append(r)
+
+    with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        stt = 1
+        for st_id, data in students_data.items():
+            status_str = "Nộp muộn" if data["is_late"] else "Đúng hạn"
+            manifest_lines.append(
+                f"{stt:<4} | {data['name']:<24} | {data['username']:<16} | {status_str:<14} | {len(data['files']):<6}"
+            )
+            safe_st_name = sanitize_filename_str(data["name"]).replace(" ", "_")
+            folder_name = f"{stt:02d}_{safe_st_name}_{data['username']}"
+
+            for idx, f in enumerate(data["files"], start=1):
+                storage_key = f["storage_key"]
+                physical_file = (UPLOAD_DIR / storage_key).resolve()
+                if physical_file.is_file():
+                    ext = physical_file.suffix or ".jpg"
+                    arcname = f"{folder_name}/trang_{idx:02d}{ext}"
+                    zf.write(physical_file, arcname=arcname)
+            stt += 1
+
+        manifest_lines.append("=" * 60)
+        zf.writestr("danh_sach_nop_bai.txt", "\n".join(manifest_lines).encode("utf-8-sig"))
+
+    def cleanup():
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+
+    return FileResponse(
+        path=tmp_path,
+        filename=zip_display_name,
+        media_type="application/zip",
+        background=BackgroundTask(cleanup)
+    )
+
